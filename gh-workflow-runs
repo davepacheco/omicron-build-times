@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+
+#
+# gh-workflow-runs: show historical runtimes for GitHub actions
+#
+
+import json
+import sys
+import github
+
+#
+# Path to the file containing the GitHub access token.
+#
+credpath = './github-access-token'
+
+def main():
+    # Load the personal access token.
+    credpath = './github-access-token'
+    credfile = open(credpath, mode='rt')
+    authtoken = credfile.read(1024)
+
+    # Instantiate the GitHub API client.
+    ghctx = github.Github(authtoken)
+
+    # TODO hardcoded args
+    reponame = 'oxidecomputer/omicron'
+    wfname = 'Rust';
+
+    print('REPO: %s' % reponame);
+    repo = ghctx.get_repo(reponame);
+    workflows = repo.get_workflows();
+    workflow_id = None;
+    print('WORKFLOWS');
+    for wf in workflows:
+        print('    %s %s' % (wf.id, wf.name));
+        if wf.name == wfname:
+            workflow_id = wf.id;
+
+    if workflow_id is None:
+        fatal('workflow not found: %s\n' % wfname)
+
+    print('found workflow: %s' % workflow_id);
+    print('WORKFLOW RUNS:');
+    runs = repo.get_workflow_runs()
+    for run in runs:
+        if run.workflow_id != workflow_id:
+            continue
+        timing = run.timing()
+        billable = {};
+        if timing.billable:
+            for key in timing.billable:
+                #print(timing.billable[key]);
+                billable[key] = timing.billable[key]['total_ms']
+
+        print(json.dumps({
+            'id': run.id,
+            'head_branch': run.head_branch,
+            'event': run.event,
+            'status': run.status,
+            'conclusion': run.conclusion,
+            'url': run.url,
+            'created_at': run.created_at.isoformat(),
+            'updated_at': run.updated_at.isoformat(),
+            'timing_billable': billable
+        }));
+
+# Dump the given message to stderr and exit the process.
+def fatal(str):
+    sys.stderr.write(str)
+    sys.exit(1)
+
+main();
